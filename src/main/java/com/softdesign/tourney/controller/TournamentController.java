@@ -4,8 +4,13 @@ import com.softdesign.tourney.dto.TournamentDto;
 import com.softdesign.tourney.models.UserEntity;
 import com.softdesign.tourney.service.TournamentService;
 import com.softdesign.tourney.service.UserService;
+import com.softdesign.tourney.strategy.CsvExportStrategy;
+import com.softdesign.tourney.strategy.JsonExportStrategy;
+import com.softdesign.tourney.strategy.XmlExportStrategy;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -27,18 +32,25 @@ public class TournamentController {
     }
 
     @GetMapping("/tournaments")
-    public String listTournaments(@RequestParam(required = false) String query, Model model, Principal principal) {
+    public String listTournaments(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String location, // New Location parameter
+            Model model, Principal principal) {
 
         List<TournamentDto> tournaments;
 
-        if (query != null && !query.isBlank()) {
-            tournaments = tournamentService.searchTournaments(query);
+        if ((query != null && !query.isBlank()) || (location != null && !location.isBlank())) {
+            // Update your service to accept both parameters
+            tournaments = tournamentService.searchTournaments(query, location);
         } else {
             tournaments = tournamentService.getTournaments();
         }
 
         model.addAttribute("tournaments", tournaments);
+
+        // Add both variables to the model so the UI remembers what was typed
         model.addAttribute("query", query);
+        model.addAttribute("location", location);
 
         if (principal != null) {
             UserEntity user = userService.findByUsername(principal.getName());
@@ -109,6 +121,56 @@ public class TournamentController {
         String username = principal.getName();
         tournamentService.leaveTournament(tournamentId, username);
         return "redirect:/tournaments?left";
+    }
+
+    @Autowired
+    private JsonExportStrategy<TournamentDto> jsonStrategy;
+    @Autowired
+    private XmlExportStrategy<TournamentDto> xmlStrategy;
+    @Autowired
+    private CsvExportStrategy csvStrategy;
+    @ResponseBody
+    @GetMapping("/tournaments/export")
+    public ResponseEntity<String> exportTournaments(
+            @RequestParam(defaultValue = "json") String format,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String location) {
+
+        List<TournamentDto> tournaments;
+
+        if ((query != null && !query.isBlank()) || (location != null && !location.isBlank())) {
+            tournaments = tournamentService.searchTournaments(query, location);
+        } else {
+            tournaments = tournamentService.getTournaments();
+        }
+
+        String result;
+        String contentType;
+        String fileName = "tournaments";
+
+        switch (format.toLowerCase()) {
+            case "xml":
+                result = xmlStrategy.export(tournaments);
+                contentType = "application/xml";
+                fileName += ".xml";
+                break;
+            case "csv":
+                result = csvStrategy.export(tournaments);
+                contentType = "text/csv";
+                fileName += ".csv";
+                break;
+            case "json":
+            default:
+                result = jsonStrategy.export(tournaments);
+                contentType = "application/json";
+                fileName += ".json";
+                break;
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                .body(result);
     }
 
 

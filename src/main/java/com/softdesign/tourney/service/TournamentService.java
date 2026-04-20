@@ -18,7 +18,7 @@ public interface TournamentService {
     void updateTournament(TournamentDto tournamentDto);
 
     void deleteTournament(Long tournamentId);
-    List<TournamentDto> searchTournaments(String query);
+    List<TournamentDto> searchTournaments(String query, String location);
     void joinTournament(Long tournamentId, String username);
     void leaveTournament(Long tournamentId, String username);
 

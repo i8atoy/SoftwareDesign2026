@@ -8,9 +8,13 @@ import com.softdesign.tourney.models.UserEntity;
 import com.softdesign.tourney.repository.TournamentRepository;
 import com.softdesign.tourney.repository.UserRepository;
 import com.softdesign.tourney.service.TournamentService;
+import com.softdesign.tourney.event.ResourceEvent;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,11 +25,21 @@ public class TournamentServiceImplementation implements TournamentService {
 
     private final TournamentRepository tournamentRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
-    public TournamentServiceImplementation(TournamentRepository tournamentRepository, UserRepository userRepository) {
+    public TournamentServiceImplementation(TournamentRepository tournamentRepository, UserRepository userRepository, ApplicationEventPublisher eventPublisher) {
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher; // Initialize Event Publisher
+    }
+
+    private String getCurrentUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            return auth.getName();
+        }
+        return "System";
     }
 
     @Override
@@ -50,6 +64,7 @@ public class TournamentServiceImplementation implements TournamentService {
         tournament.setVrsPoints(tournamentDto.getVrsPoints());
 
         save(tournament);
+        eventPublisher.publishEvent(new ResourceEvent(this, "CREATED", "Tournament", tournament.getName(), getCurrentUsername()));
     }
 
     @Override
@@ -70,11 +85,18 @@ public class TournamentServiceImplementation implements TournamentService {
         existingTournament.setVrsPoints(tournamentDto.getVrsPoints());
 
         tournamentRepository.save(existingTournament);
+        eventPublisher.publishEvent(new ResourceEvent(this, "UPDATED", "Tournament", existingTournament.getName(), getCurrentUsername()));
     }
 
     @Override
     public void deleteTournament(Long tournamentId) {
-        tournamentRepository.deleteById(tournamentId);
+        Tournament tournament = tournamentRepository.findById(tournamentId).orElse(null);
+        if (tournament != null) {
+            String name = tournament.getName();
+            tournamentRepository.deleteById(tournamentId);
+
+            eventPublisher.publishEvent(new ResourceEvent(this, "DELETED", "Tournament", name, getCurrentUsername()));
+        }
     }
 
     private TournamentDto mapToTournamentDto(Tournament tournament) {
@@ -99,12 +121,12 @@ public class TournamentServiceImplementation implements TournamentService {
     }
 
     @Override
-    public List<TournamentDto> searchTournaments(String query) {
-        return tournamentRepository
-                .findByNameContainingIgnoreCase(query)
-                .stream()
+    public List<TournamentDto> searchTournaments(String query, String location) {
+        List<Tournament> tournaments = tournamentRepository.searchByQueryAndLocation(query, location);
+
+        return tournaments.stream()
                 .map(this::mapToTournamentDto)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -124,6 +146,13 @@ public class TournamentServiceImplementation implements TournamentService {
         if (!tournament.getTeams().contains(teamToJoin)) {
             tournament.getTeams().add(teamToJoin);
             tournamentRepository.save(tournament);
+            eventPublisher.publishEvent(new ResourceEvent(
+                    this,
+                    "JOINED",
+                    "Tournament",
+                    tournament.getName(),
+                    getCurrentUsername()
+            ));
         }
     }
 
@@ -140,6 +169,14 @@ public class TournamentServiceImplementation implements TournamentService {
 
             tournament.getTeams().remove(teamToLeave);
             tournamentRepository.save(tournament);
+
+            eventPublisher.publishEvent(new ResourceEvent(
+                    this,
+                    "LEFT",
+                    "Tournament",
+                    tournament.getName(),
+                    getCurrentUsername()
+            ));
         }
     }
 }

@@ -60,18 +60,51 @@
         <a sec:authorize="hasAuthority('ADMIN')" th:href="@{/tournaments/new}" class="btn btn-dark-custom fw-bold px-4 py-2">Create Tournament</a>
     </div>
 
+
     <form th:action="@{/tournaments}" method="get" class="mb-4">
-        <div class="input-group">
-            <input type="text"
-                   name="query"
-                   class="form-control"
-                   placeholder="Search tournaments..."
-                   th:value="${query}">
-            <button class="btn btn-dark-custom fw-bold" type="submit">
-                Search
-            </button>
+        <div class="row g-2">
+            <div class="col-md-5">
+                <input type="text"
+                       name="query"
+                       class="form-control"
+                       placeholder="Search tournament name..."
+                       th:value="${query}">
+            </div>
+            <div class="col-md-5">
+                <input type="text"
+                       name="location"
+                       class="form-control"
+                       placeholder="Filter by location..."
+                       th:value="${location}">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-dark-custom fw-bold" type="submit">Filter</button>
+            </div>
         </div>
     </form>
+
+    <div style="margin-bottom: 20px;">
+        <strong>Export Tournaments: </strong>
+
+        <a th:href="@{/tournaments/export(format='json', query=${query}, location=${location})}"
+           class="btn btn-outline-primary btn-sm" style="margin-right: 5px;">
+            Download JSON
+        </a>
+
+        <a th:href="@{/tournaments/export(format='xml', query=${query}, location=${location})}"
+           class="btn btn-outline-secondary btn-sm" style="margin-right: 5px;">
+            Download XML
+        </a>
+
+        <a th:href="@{/tournaments/export(format='csv', query=${query}, location=${location})}"
+           class="btn btn-outline-success btn-sm">
+            Download CSV
+        </a>
+
+        <a th:if="${query != null or location != null}" th:href="@{/tournaments}" class="btn btn-link btn-sm text-danger ms-2">
+            Clear Filters
+        </a>
+    </div>
 
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
 
