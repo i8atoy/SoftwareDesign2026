@@ -34,13 +34,12 @@ public class TournamentController {
     @GetMapping("/tournaments")
     public String listTournaments(
             @RequestParam(required = false) String query,
-            @RequestParam(required = false) String location, // New Location parameter
+            @RequestParam(required = false) String location,
             Model model, Principal principal) {
 
         List<TournamentDto> tournaments;
 
         if ((query != null && !query.isBlank()) || (location != null && !location.isBlank())) {
-            // Update your service to accept both parameters
             tournaments = tournamentService.searchTournaments(query, location);
         } else {
             tournaments = tournamentService.getTournaments();
@@ -48,7 +47,6 @@ public class TournamentController {
 
         model.addAttribute("tournaments", tournaments);
 
-        // Add both variables to the model so the UI remembers what was typed
         model.addAttribute("query", query);
         model.addAttribute("location", location);
 
