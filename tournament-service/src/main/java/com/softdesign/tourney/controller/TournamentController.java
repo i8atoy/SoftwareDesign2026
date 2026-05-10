@@ -1,5 +1,6 @@
 package com.softdesign.tourney.controller;
 
+import com.softdesign.tourney.client.AuthServiceClient;
 import com.softdesign.tourney.dto.TournamentDto;
 import com.softdesign.tourney.service.TournamentService;
 import com.softdesign.tourney.strategy.CsvExportStrategy;
@@ -21,10 +22,13 @@ import java.util.List;
 public class TournamentController {
 
     private final TournamentService tournamentService;
+    private final AuthServiceClient authServiceClient;
 
     @Autowired
-    public TournamentController(TournamentService tournamentService) {
+    public TournamentController(TournamentService tournamentService,
+                                AuthServiceClient authServiceClient) {
         this.tournamentService = tournamentService;
+        this.authServiceClient = authServiceClient;
     }
 
     @GetMapping("/tournaments")
@@ -34,7 +38,6 @@ public class TournamentController {
             Model model, Principal principal) {
 
         List<TournamentDto> tournaments;
-
         if ((query != null && !query.isBlank()) || (location != null && !location.isBlank())) {
             tournaments = tournamentService.searchTournaments(query, location);
         } else {
@@ -46,10 +49,10 @@ public class TournamentController {
         model.addAttribute("location", location);
 
         if (principal != null) {
-            // MICROSERVICE FIX: We can no longer query the User database directly here.
-            // Later, we will use RestTemplate or WebClient to ask the auth-service for this user's Team ID.
-            // For now, we will just pass the username.
             model.addAttribute("username", principal.getName());
+            // Fetch the logged-in manager's team ID so the template can show Join/Leave
+            Long managerTeamId = authServiceClient.getTeamIdForUser(principal.getName());
+            model.addAttribute("managerTeamId", managerTeamId);
         }
 
         return "tournaments-list";
@@ -57,42 +60,35 @@ public class TournamentController {
 
     @GetMapping("/tournaments/new")
     public String showCreateForm(Model model) {
-        TournamentDto tournament = new TournamentDto();
-        model.addAttribute("tournament", tournament);
+        model.addAttribute("tournament", new TournamentDto());
         return "tournaments-create";
     }
 
     @PostMapping("/tournaments/new")
-    public String saveTournament(@Valid @ModelAttribute("tournament") TournamentDto tournamentDto, BindingResult bindingResult) {
-        if (bindingResult.hasErrors()) {
-            return "tournaments-create";
-        }
+    public String saveTournament(@Valid @ModelAttribute("tournament") TournamentDto tournamentDto,
+                                 BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) return "tournaments-create";
         tournamentService.saveTournament(tournamentDto);
         return "redirect:/tournaments";
     }
 
     @GetMapping("/tournaments/{tournamentId}/edit")
     public String editTournamentForm(@PathVariable("tournamentId") int tournamentId, Model model) {
-        TournamentDto tournamentDto = tournamentService.findClubById(tournamentId);
-        model.addAttribute("tournament", tournamentDto);
+        model.addAttribute("tournament", tournamentService.findClubById(tournamentId));
         return "tournaments-edit";
     }
 
     @PostMapping("/tournaments/{tournamentId}/edit")
     public String editTournament(@PathVariable("tournamentId") Long tournamentId,
                                  @Valid @ModelAttribute("tournament") TournamentDto tournamentDto,
-                                 BindingResult bindingResult,
-                                 Model model) {
-
+                                 BindingResult bindingResult, Model model) {
         if (bindingResult.hasErrors()) {
             tournamentDto.setId(tournamentId);
             model.addAttribute("tournament", tournamentDto);
             return "tournaments-edit";
         }
-
         tournamentDto.setId(tournamentId);
         tournamentService.updateTournament(tournamentDto);
-
         return "redirect:/tournaments";
     }
 
@@ -104,24 +100,21 @@ public class TournamentController {
 
     @PostMapping("/tournaments/{tournamentId}/join")
     public String joinTournament(@PathVariable("tournamentId") Long tournamentId, Principal principal) {
-        String username = principal.getName();
-        tournamentService.joinTournament(tournamentId, username);
+        tournamentService.joinTournament(tournamentId, principal.getName());
         return "redirect:/tournaments?joined";
     }
 
     @PostMapping("/tournaments/{tournamentId}/leave")
     public String leaveTournament(@PathVariable("tournamentId") Long tournamentId, Principal principal) {
-        String username = principal.getName();
-        tournamentService.leaveTournament(tournamentId, username);
+        tournamentService.leaveTournament(tournamentId, principal.getName());
         return "redirect:/tournaments?left";
     }
 
-    @Autowired
-    private JsonExportStrategy<TournamentDto> jsonStrategy;
-    @Autowired
-    private XmlExportStrategy<TournamentDto> xmlStrategy;
-    @Autowired
-    private CsvExportStrategy csvStrategy;
+    // ── Export ──────────────────────────────────────────────────────────────────
+
+    @Autowired private JsonExportStrategy<TournamentDto> jsonStrategy;
+    @Autowired private XmlExportStrategy<TournamentDto> xmlStrategy;
+    @Autowired private CsvExportStrategy csvStrategy;
 
     @ResponseBody
     @GetMapping("/tournaments/export")
@@ -130,13 +123,10 @@ public class TournamentController {
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String location) {
 
-        List<TournamentDto> tournaments;
-
-        if ((query != null && !query.isBlank()) || (location != null && !location.isBlank())) {
-            tournaments = tournamentService.searchTournaments(query, location);
-        } else {
-            tournaments = tournamentService.getTournaments();
-        }
+        List<TournamentDto> tournaments =
+                ((query != null && !query.isBlank()) || (location != null && !location.isBlank()))
+                        ? tournamentService.searchTournaments(query, location)
+                        : tournamentService.getTournaments();
 
         String result;
         String contentType;
@@ -153,12 +143,10 @@ public class TournamentController {
                 contentType = "text/csv";
                 fileName += ".csv";
                 break;
-            case "json":
             default:
                 result = jsonStrategy.export(tournaments);
                 contentType = "application/json";
                 fileName += ".json";
-                break;
         }
 
         return ResponseEntity.ok()

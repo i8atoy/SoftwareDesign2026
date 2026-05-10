@@ -17,23 +17,14 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/register/**", "/login", "/css/**", "/js/**").permitAll()
-
-                        // Internal REST API called by tournament-service / team-service.
-                        // In production you would lock this down with an API key or network policy.
+                        // Internal REST API — open for service-to-service calls
                         .requestMatchers("/api/**").permitAll()
-
-                        .requestMatchers("/tournaments").authenticated()
-                        .requestMatchers("/tournaments/*/join", "/tournaments/*/leave").hasAuthority("MANAGER")
-                        .requestMatchers("/tournaments/**").hasAuthority("ADMIN")
-
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                        // All UI endpoints require authentication
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form
                         .loginPage("/login")
-                        .loginProcessingUrl("/login")
-                        .defaultSuccessUrl("/tournaments", true)
                         .permitAll()
                 )
                 .logout(LogoutConfigurer::permitAll);

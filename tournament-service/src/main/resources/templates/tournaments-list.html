@@ -16,39 +16,22 @@
             border-top-left-radius: calc(.25rem - 1px);
             border-top-right-radius: calc(.25rem - 1px);
         }
-
         .team-sm-logo {
-            width: 40px;
-            height: 40px;
+            width: 40px; height: 40px;
             object-fit: contain;
             background-color: #212529;
             border-radius: 8px;
             margin-right: 12px;
             padding: 4px;
         }
-
         .team-link {
-            text-decoration: none;
-            color: inherit;
-            display: flex;
-            align-items: center;
+            text-decoration: none; color: inherit;
+            display: flex; align-items: center;
             transition: background-color 0.2s;
         }
-
-        .team-link:hover {
-            background-color: #f8f9fa;
-        }
-
-        .btn-dark-custom {
-            background-color: #1a1e22;
-            color: white;
-            border: none;
-        }
-
-        .btn-dark-custom:hover {
-            background-color: #2c3238;
-            color: white;
-        }
+        .team-link:hover { background-color: #f8f9fa; }
+        .btn-dark-custom { background-color: #1a1e22; color: white; border: none; }
+        .btn-dark-custom:hover { background-color: #2c3238; color: white; }
     </style>
 </head>
 <body class="bg-light">
@@ -57,25 +40,20 @@
 
     <div class="d-flex justify-content-between align-items-center mb-5">
         <h1 class="m-0 text-dark fw-bold">Active Tournaments</h1>
-        <a sec:authorize="hasAuthority('ADMIN')" th:href="@{/tournaments/new}" class="btn btn-dark-custom fw-bold px-4 py-2">Create Tournament</a>
+        <a sec:authorize="hasAuthority('ADMIN')" th:href="@{/tournaments/new}"
+           class="btn btn-dark-custom fw-bold px-4 py-2">Create Tournament</a>
     </div>
 
-
+    <!-- Search / filter -->
     <form th:action="@{/tournaments}" method="get" class="mb-4">
         <div class="row g-2">
             <div class="col-md-5">
-                <input type="text"
-                       name="query"
-                       class="form-control"
-                       placeholder="Search tournament name..."
-                       th:value="${query}">
+                <input type="text" name="query" class="form-control"
+                       placeholder="Search tournament name..." th:value="${query}">
             </div>
             <div class="col-md-5">
-                <input type="text"
-                       name="location"
-                       class="form-control"
-                       placeholder="Filter by location..."
-                       th:value="${location}">
+                <input type="text" name="location" class="form-control"
+                       placeholder="Filter by location..." th:value="${location}">
             </div>
             <div class="col-md-2 d-grid">
                 <button class="btn btn-dark-custom fw-bold" type="submit">Filter</button>
@@ -83,29 +61,24 @@
         </div>
     </form>
 
+    <!-- Export -->
     <div style="margin-bottom: 20px;">
-        <strong>Export Tournaments: </strong>
-
+        <strong>Export: </strong>
         <a th:href="@{/tournaments/export(format='json', query=${query}, location=${location})}"
-           class="btn btn-outline-primary btn-sm" style="margin-right: 5px;">
-            Download JSON
-        </a>
-
+           class="btn btn-outline-primary btn-sm me-1">JSON</a>
         <a th:href="@{/tournaments/export(format='xml', query=${query}, location=${location})}"
-           class="btn btn-outline-secondary btn-sm" style="margin-right: 5px;">
-            Download XML
-        </a>
-
+           class="btn btn-outline-secondary btn-sm me-1">XML</a>
         <a th:href="@{/tournaments/export(format='csv', query=${query}, location=${location})}"
-           class="btn btn-outline-success btn-sm">
-            Download CSV
-        </a>
-
-        <a th:if="${query != null or location != null}" th:href="@{/tournaments}" class="btn btn-link btn-sm text-danger ms-2">
-            Clear Filters
-        </a>
+           class="btn btn-outline-success btn-sm">CSV</a>
+        <a th:if="${query != null or location != null}" th:href="@{/tournaments}"
+           class="btn btn-link btn-sm text-danger ms-2">Clear Filters</a>
     </div>
 
+    <!-- Flash messages -->
+    <div th:if="${param.joined}" class="alert alert-success">Successfully joined the tournament.</div>
+    <div th:if="${param.left}"   class="alert alert-warning">Your team has left the tournament.</div>
+
+    <!-- Cards -->
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
 
         <div class="col" th:each="tournament : ${tournaments}">
@@ -116,66 +89,79 @@
                 </div>
 
                 <div class="card-body text-center pb-3">
-                    <p class="card-text text-muted mb-2 small">
-                        <span th:text="${tournament.location}">Location</span>
-                    </p>
+                    <p class="card-text text-muted mb-2 small" th:text="${tournament.location}">Location</p>
 
                     <div class="d-flex justify-content-center gap-2 mb-3">
-                        <span class="badge bg-primary" th:text="${tournament.vrsPoints} + ' VRS Pts'">0 VRS Pts</span>
-                        <span class="badge bg-success" th:text="'$' + ${#numbers.formatDecimal(tournament.prizeMoney, 0, 'COMMA', 2, 'POINT')}">$0.00</span>
+                        <span class="badge bg-primary"
+                              th:text="${tournament.vrsPoints} + ' VRS Pts'">0 VRS Pts</span>
+                        <span class="badge bg-success"
+                              th:text="'$' + ${#numbers.formatDecimal(tournament.prizeMoney, 0, 'COMMA', 2, 'POINT')}">$0.00</span>
                     </div>
 
+                    <!-- ADMIN controls -->
                     <div class="mt-2 px-2 d-flex gap-2" sec:authorize="hasAuthority('ADMIN')">
-                        <a th:href="@{/tournaments/{id}/edit(id=${tournament.id})}" class="btn btn-sm btn-outline-dark flex-grow-1 fw-bold">
-                            Edit
-                        </a>
+                        <a th:href="@{/tournaments/{id}/edit(id=${tournament.id})}"
+                           class="btn btn-sm btn-outline-dark flex-grow-1 fw-bold">Edit</a>
                         <a th:href="@{/tournaments/{id}/delete(id=${tournament.id})}"
                            class="btn btn-sm btn-outline-danger flex-grow-1 fw-bold"
-                           onclick="return confirm('Delete this tournament?')">
-                            Delete
-                        </a>
+                           onclick="return confirm('Delete this tournament?')">Delete</a>
                     </div>
 
-                    <div class="mt-2 px-2 d-flex gap-2" sec:authorize="hasAuthority('MANAGER')">
+                    <!-- MANAGER controls — uses managerTeamId from model and resolved tournament.teams -->
+                    <div class="mt-2 px-2" sec:authorize="hasAuthority('MANAGER')">
 
-                        <form th:if="${managerTeamId != null and !#lists.contains(tournament.teams.![id], managerTeamId)}"
-                              th:action="@{/tournaments/{id}/join(id=${tournament.id})}" method="post" class="flex-grow-1 m-0">
-                            <button type="submit" class="btn btn-sm btn-success w-100 fw-bold">
-                                Join
-                            </button>
-                        </form>
-
-                        <form th:if="${managerTeamId != null and #lists.contains(tournament.teams.![id], managerTeamId)}"
-                              th:action="@{/tournaments/{id}/leave(id=${tournament.id})}" method="post" class="flex-grow-1 m-0">
-                            <button type="submit" class="btn btn-sm btn-outline-warning w-100 fw-bold"
-                                    onclick="return confirm('Are you sure you want to withdraw your team from this tournament?')">
-                                Leave
-                            </button>
-                        </form>
-
-                        <div th:if="${managerTeamId == null}" class="alert alert-warning p-1 m-0 flex-grow-1 text-center small fw-bold">
+                        <!-- User has no team assigned -->
+                        <div th:if="${managerTeamId == null}"
+                             class="alert alert-warning p-1 m-0 text-center small fw-bold">
                             No team assigned to your account.
                         </div>
 
+                        <!-- User has a team — show Join or Leave depending on membership -->
+                        <div th:if="${managerTeamId != null}" class="d-flex gap-2">
+
+                            <!-- Already a member → Leave button -->
+                            <form th:if="${#lists.contains(tournament.teamIds, managerTeamId)}"
+                                  th:action="@{/tournaments/{id}/leave(id=${tournament.id})}"
+                                  method="post" class="flex-grow-1 m-0">
+                                <button type="submit"
+                                        class="btn btn-sm btn-outline-warning w-100 fw-bold"
+                                        onclick="return confirm('Withdraw your team from this tournament?')">
+                                    Leave
+                                </button>
+                            </form>
+
+                            <!-- Not a member → Join button -->
+                            <form th:unless="${#lists.contains(tournament.teamIds, managerTeamId)}"
+                                  th:action="@{/tournaments/{id}/join(id=${tournament.id})}"
+                                  method="post" class="flex-grow-1 m-0">
+                                <button type="submit" class="btn btn-sm btn-success w-100 fw-bold">
+                                    Join
+                                </button>
+                            </form>
+
+                        </div>
                     </div>
                 </div>
 
+                <!-- Participating teams list — uses tournament.teams (resolved TeamDto objects) -->
                 <div class="card-footer bg-white border-top p-0">
                     <div class="bg-light px-3 py-2 border-bottom">
-                        <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Participating Teams</small>
+                        <small class="text-muted fw-bold text-uppercase"
+                               style="font-size: 0.7rem;">Participating Teams</small>
                     </div>
-
                     <ul class="list-group list-group-flush">
                         <li class="list-group-item p-0" th:each="team : ${tournament.teams}">
                             <a href="#" class="team-link p-2">
                                 <img th:src="${team.photoUrl}" class="team-sm-logo" th:alt="${team.name}">
                                 <div>
                                     <div class="fw-bold small" th:text="${team.name}">Team Name</div>
-                                    <small class="text-muted" style="font-size: 0.75rem;" th:text="${team.country}">Country</small>
+                                    <small class="text-muted" style="font-size:0.75rem"
+                                           th:text="${team.country}">Country</small>
                                 </div>
                             </a>
                         </li>
-                        <li class="list-group-item text-center text-muted py-4 small" th:if="${#lists.isEmpty(tournament.teams)}">
+                        <li class="list-group-item text-center text-muted py-4 small"
+                            th:if="${#lists.isEmpty(tournament.teams)}">
                             No teams registered yet
                         </li>
                     </ul>

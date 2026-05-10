@@ -7,10 +7,11 @@ import com.softdesign.tourney.model.Team;
 import com.softdesign.tourney.repository.PlayerRepository;
 import com.softdesign.tourney.repository.TeamRepository;
 import com.softdesign.tourney.service.TeamService;
-import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,8 +27,15 @@ public class TeamServiceImplementation implements TeamService {
 
     @Override
     public List<TeamDto> getAllTeams() {
-        List<Team> teams = teamRepository.findAll(Sort.by(Sort.Direction.ASC, "id"));
-        return teams.stream().map(this::mapToTeamDto).collect(Collectors.toList());
+        return teamRepository.findAll(Sort.by(Sort.Direction.ASC, "id"))
+                .stream()
+                .map(this::mapToTeamDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<TeamDto> getTeamById(Long id) {
+        return teamRepository.findById(id).map(this::mapToTeamDto);
     }
 
     private TeamDto mapToTeamDto(Team team) {
@@ -49,8 +57,8 @@ public class TeamServiceImplementation implements TeamService {
         teamDto.setVrsPoints(team.getVrsPoints());
         teamDto.setCountry(team.getCountry());
         teamDto.setPhotoUrl(team.getPhotoUrl());
+        teamDto.setManagerId(team.getManagerId());
         teamDto.setPlayers(playerDtos);
-
 
         return teamDto;
     }

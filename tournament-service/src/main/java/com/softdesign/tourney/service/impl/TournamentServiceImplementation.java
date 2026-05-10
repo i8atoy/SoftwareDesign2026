@@ -1,14 +1,18 @@
 package com.softdesign.tourney.service.impl;
 
+import com.softdesign.tourney.client.AuthServiceClient;
+import com.softdesign.tourney.client.TeamServiceClient;
+import com.softdesign.tourney.dto.TeamDto;
 import com.softdesign.tourney.dto.TournamentDto;
 import com.softdesign.tourney.models.Tournament;
 import com.softdesign.tourney.repository.TournamentRepository;
 import com.softdesign.tourney.service.TournamentService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -19,20 +23,27 @@ import java.util.stream.Collectors;
 public class TournamentServiceImplementation implements TournamentService {
 
     private final TournamentRepository tournamentRepository;
-
+    private final AuthServiceClient authServiceClient;
+    private final TeamServiceClient teamServiceClient;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
-    public TournamentServiceImplementation(TournamentRepository tournamentRepository) {
+    public TournamentServiceImplementation(TournamentRepository tournamentRepository,
+                                           AuthServiceClient authServiceClient,
+                                           TeamServiceClient teamServiceClient,
+                                           ApplicationEventPublisher eventPublisher) {
         this.tournamentRepository = tournamentRepository;
+        this.authServiceClient = authServiceClient;
+        this.teamServiceClient = teamServiceClient;
+        this.eventPublisher = eventPublisher;
     }
 
     private String getCurrentUsername() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated()) {
-            return auth.getName();
-        }
-        return "System";
+        return (auth != null && auth.isAuthenticated()) ? auth.getName() : "System";
     }
+
+    // ── Read ────────────────────────────────────────────────────────────────────
 
     @Override
     @Transactional
@@ -42,6 +53,22 @@ public class TournamentServiceImplementation implements TournamentService {
     }
 
     @Override
+    public TournamentDto findClubById(long tournamentId) {
+        Tournament tournament = tournamentRepository.findById(tournamentId).orElseThrow();
+        return mapToTournamentDto(tournament);
+    }
+
+    @Override
+    public List<TournamentDto> searchTournaments(String query, String location) {
+        return tournamentRepository.searchByQueryAndLocation(query, location)
+                .stream()
+                .map(this::mapToTournamentDto)
+                .collect(Collectors.toList());
+    }
+
+    // ── Write ───────────────────────────────────────────────────────────────────
+
+    @Override
     public Tournament save(Tournament tournament) {
         return tournamentRepository.save(tournament);
     }
@@ -49,54 +76,85 @@ public class TournamentServiceImplementation implements TournamentService {
     @Override
     public void saveTournament(TournamentDto tournamentDto) {
         Tournament tournament = new Tournament();
-
         tournament.setName(tournamentDto.getName());
         tournament.setLocation(tournamentDto.getLocation());
         tournament.setPrizeMoney(tournamentDto.getPrizeMoney());
         tournament.setVrsPoints(tournamentDto.getVrsPoints());
-        tournament.setTeamIds(new ArrayList<>()); // Initialize empty list
-
+        tournament.setTeamIds(new ArrayList<>());
         save(tournament);
 
-        // TODO: Send RabbitMQ Event -> new ResourceEvent("CREATED", "Tournament", tournament.getName(), getCurrentUsername())
-    }
-
-    @Override
-    public TournamentDto findClubById(long tournamentId) {
-        Tournament tournament = tournamentRepository.findById(tournamentId).orElseThrow();
-        return mapToTournamentDto(tournament);
+        // TODO: publish ResourceEvent to RabbitMQ when message broker is added
     }
 
     @Override
     @Transactional
     public void updateTournament(TournamentDto tournamentDto) {
-        Tournament existingTournament = tournamentRepository.findById(tournamentDto.getId())
+        Tournament existing = tournamentRepository.findById(tournamentDto.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Tournament not found"));
 
-        existingTournament.setName(tournamentDto.getName());
-        existingTournament.setLocation(tournamentDto.getLocation());
-        existingTournament.setPrizeMoney(tournamentDto.getPrizeMoney());
-        existingTournament.setVrsPoints(tournamentDto.getVrsPoints());
+        existing.setName(tournamentDto.getName());
+        existing.setLocation(tournamentDto.getLocation());
+        existing.setPrizeMoney(tournamentDto.getPrizeMoney());
+        existing.setVrsPoints(tournamentDto.getVrsPoints());
+        tournamentRepository.save(existing);
 
-        tournamentRepository.save(existingTournament);
-
-        // TODO: Send RabbitMQ Event -> new ResourceEvent("UPDATED", "Tournament", existingTournament.getName(), getCurrentUsername())
+        // TODO: publish ResourceEvent to RabbitMQ when message broker is added
     }
 
     @Override
     public void deleteTournament(Long tournamentId) {
         Tournament tournament = tournamentRepository.findById(tournamentId).orElse(null);
         if (tournament != null) {
-            String name = tournament.getName();
             tournamentRepository.deleteById(tournamentId);
-
-            // TODO: Send RabbitMQ Event -> new ResourceEvent("DELETED", "Tournament", name, getCurrentUsername())
+            // TODO: publish ResourceEvent to RabbitMQ when message broker is added
         }
     }
 
+    // ── Join / Leave ────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public void joinTournament(Long tournamentId, String username) {
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid tournament id: " + tournamentId));
+
+        // Real REST call to auth-service — replaces the hardcoded stub
+        Long teamId = authServiceClient.getTeamIdForUser(username);
+        if (teamId == null) {
+            throw new IllegalStateException("User '" + username + "' has no managed team");
+        }
+
+        if (tournament.getTeamIds() == null) {
+            tournament.setTeamIds(new ArrayList<>());
+        }
+        if (!tournament.getTeamIds().contains(teamId)) {
+            tournament.getTeamIds().add(teamId);
+            tournamentRepository.save(tournament);
+        }
+        // TODO: publish ResourceEvent to RabbitMQ when message broker is added
+    }
+
+    @Override
+    @Transactional
+    public void leaveTournament(Long tournamentId, String username) {
+        Tournament tournament = tournamentRepository.findById(tournamentId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid tournament id: " + tournamentId));
+
+        // Real REST call to auth-service — replaces the hardcoded stub
+        Long teamId = authServiceClient.getTeamIdForUser(username);
+        if (teamId == null) return;
+
+        if (tournament.getTeamIds() != null) {
+            tournament.getTeamIds().remove(teamId);
+            tournamentRepository.save(tournament);
+        }
+        // TODO: publish ResourceEvent to RabbitMQ when message broker is added
+    }
+
+    // ── Mapping ─────────────────────────────────────────────────────────────────
+
     private TournamentDto mapToTournamentDto(Tournament tournament) {
         TournamentDto dto = new TournamentDto();
-
         dto.setId(tournament.getId());
         dto.setName(tournament.getName());
         dto.setLocation(tournament.getLocation());
@@ -104,51 +162,16 @@ public class TournamentServiceImplementation implements TournamentService {
         dto.setVrsPoints(tournament.getVrsPoints());
         dto.setTeamIds(tournament.getTeamIds());
 
-        return dto;
-    }
-
-    @Override
-    public List<TournamentDto> searchTournaments(String query, String location) {
-        List<Tournament> tournaments = tournamentRepository.searchByQueryAndLocation(query, location);
-
-        return tournaments.stream()
-                .map(this::mapToTournamentDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional
-    public void joinTournament(Long tournamentId, String username) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid tournament Id:" + tournamentId));
-
-        // MICROSERVICE FIX: We cannot query the UserRepository here anymore.
-        // TODO: Make a REST call to auth-service: GET http://localhost:8081/api/users/{username}/teamId
-        Long teamId = 1L; // STUB: Hardcoded for now so it compiles
-
-        if (tournament.getTeamIds() != null && !tournament.getTeamIds().contains(teamId)) {
-            tournament.getTeamIds().add(teamId);
-            tournamentRepository.save(tournament);
-
-            // TODO: Send RabbitMQ Event ("JOINED")
-        }
-    }
-
-    @Override
-    @Transactional
-    public void leaveTournament(Long tournamentId, String username) {
-        Tournament tournament = tournamentRepository.findById(tournamentId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid tournament Id:" + tournamentId));
-
-        // MICROSERVICE FIX: We cannot query the UserRepository here anymore.
-        // TODO: Make a REST call to auth-service to get the team ID
-        Long teamId = 1L; // STUB: Hardcoded for now so it compiles
-
+        // Resolve team IDs → TeamDto objects via team-service REST call
+        List<TeamDto> teams = new ArrayList<>();
         if (tournament.getTeamIds() != null) {
-            tournament.getTeamIds().remove(teamId);
-            tournamentRepository.save(tournament);
-
-            // TODO: Send RabbitMQ Event ("LEFT")
+            for (Long teamId : tournament.getTeamIds()) {
+                TeamDto team = teamServiceClient.getTeamById(teamId);
+                if (team != null) teams.add(team);
+            }
         }
+        dto.setTeams(teams);
+
+        return dto;
     }
 }

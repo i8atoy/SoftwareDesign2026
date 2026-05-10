@@ -1,33 +1,58 @@
 package com.softdesign.tourney.config;
 
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.LogoutConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.client.RestTemplate;
+
+import javax.sql.DataSource;
 
 @Configuration
 @EnableWebSecurity
-public class SecurityConfig {
+public class AppConfig {
+
+    // ── Auth datasource (auth_db) — used only by CustomUserDetailsService ───────
+
+    @Value("${auth.datasource.url}")
+    private String authUrl;
+
+    @Value("${auth.datasource.username}")
+    private String authUsername;
+
+    @Value("${auth.datasource.password}")
+    private String authPassword;
+
+    @Bean
+    @Qualifier("authDataSource")
+    public DataSource authDataSource() {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName("org.postgresql.Driver");
+        ds.setUrl(authUrl);
+        ds.setUsername(authUsername);
+        ds.setPassword(authPassword);
+        return ds;
+    }
+
+    // ── Security ─────────────────────────────────────────────────────────────────
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/register/**", "/login", "/css/**", "/js/**").permitAll()
-
-                        // Internal REST API called by tournament-service / team-service.
-                        // In production you would lock this down with an API key or network policy.
-                        .requestMatchers("/api/**").permitAll()
-
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                        .requestMatchers("/login", "/css/**", "/js/**").permitAll()
                         .requestMatchers("/tournaments").authenticated()
                         .requestMatchers("/tournaments/*/join", "/tournaments/*/leave").hasAuthority("MANAGER")
                         .requestMatchers("/tournaments/**").hasAuthority("ADMIN")
-
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form
@@ -44,5 +69,10 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 }
