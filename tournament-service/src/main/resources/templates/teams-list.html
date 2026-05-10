@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Teams</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Custom styling to ensure team logos fit nicely */
+        .team-logo {
+            height: 150px;
+            object-fit: contain;
+            background-color: #212529; /* Dark background for transparent CS logos */
+            padding: 1rem;
+        }
+        .player-img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 50%;
+            background-color: #3e4c54; /* HLTV standard background */
+            margin-right: 10px;
+        }
+        .player-link {
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            align-items: center;
+        }
+        .player-link:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <h1 class="text-center mb-5">Participating Teams</h1>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+
+        <div class="col" th:each="team : ${teams}">
+            <div class="card h-100 shadow-sm border-0">
+
+                <img th:src="${team.photoUrl}" class="card-img-top team-logo" th:alt="${team.name} + ' Logo'">
+
+                <div class="card-body text-center pb-2">
+                    <h4 class="card-title fw-bold" th:text="${team.name}">Team Name</h4>
+                    <p class="card-text text-muted mb-1">
+                        <span th:text="${team.country}">Country</span> •
+                        <span class="badge bg-primary" th:text="${team.vrsPoints} + ' VRS Pts'">0 VRS Pts</span>
+                    </p>
+                </div>
+
+                <div class="card-footer bg-white border-top-0 p-0">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item p-0" th:each="player : ${team.players}">
+                            <a th:href="@{/players/{id}(id=${player.id})}" class="player-link p-2">
+                                <img th:src="${player.photoUrl}" class="player-img" th:alt="${player.name}">
+                                <div>
+                                    <div class="fw-bold" th:text="${player.name}">Player Name</div>
+                                    <small class="text-muted" th:text="${player.position}">Position</small>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="list-group-item text-center text-muted py-3" th:if="${#lists.isEmpty(team.players)}">
+                            Roster pending
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

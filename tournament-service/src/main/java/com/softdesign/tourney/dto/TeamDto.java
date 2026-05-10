@@ -1,5 +1,8 @@
 package com.softdesign.tourney.dto;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Mirror of team-service's TeamDto.
  * Only the fields tournament-service needs for the tournaments-list view.
@@ -10,6 +13,10 @@ public class TeamDto {
     private String country;
     private int vrsPoints;
     private String photoUrl;
+    private List<PlayerDto> players = new ArrayList<>();
+
+    public List<PlayerDto> getPlayers() { return players; }
+    public void setPlayers(List<PlayerDto> players) { this.players = players; }
 
     public TeamDto() {}
 
