@@ -1,0 +1,15 @@
+# Keep build context small — only the compiled JAR is needed.
+# Place a copy of this file in each service directory alongside its Dockerfile.
+
+**/.git
+**/.idea
+**/.vscode
+**/src
+**/target/classes
+**/target/generated-sources
+**/target/generated-test-sources
+**/target/maven-*
+**/target/surefire-reports
+**/target/test-classes
+**/*.iml
+**/HELP.md
