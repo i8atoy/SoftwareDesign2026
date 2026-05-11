@@ -7,16 +7,24 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
-public class JsonExportStrategy<T> implements ExportStrategy<T> {
+public class JsonExportStrategy<T> extends AbstractExportTemplate<T> {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public String export(List<T> data) {
+    protected List<T> fetchData(List<T> rawData) {
+        if (rawData == null) {
+            return List.of();
+        }
+        return rawData;
+    }
+    @Override
+    protected String transform(List<T> data) {
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(data);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error exporting to JSON", e);
         }
     }
+
 }

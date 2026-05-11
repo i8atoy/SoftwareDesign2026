@@ -2,6 +2,7 @@ package com.softdesign.tourney.controller;
 
 import com.softdesign.tourney.client.AuthServiceClient;
 import com.softdesign.tourney.client.TeamServiceClient;
+import com.softdesign.tourney.command.*;
 import com.softdesign.tourney.dto.PlayerDto;
 import com.softdesign.tourney.dto.TournamentDto;
 import com.softdesign.tourney.service.TournamentCommandService;
@@ -27,18 +28,16 @@ import java.util.List;
 @Controller
 public class TournamentController {
 
-    private final AuthServiceClient authServiceClient;
     private final TournamentQueryService queryService;
+
+
     private final TournamentCommandService commandService;
 
-    @Autowired
-    public TournamentController(TournamentQueryService queryService,
-                                TournamentCommandService commandService,
-                                AuthServiceClient authServiceClient) {
-        this.queryService = queryService;
-        this.commandService = commandService;
-        this.authServiceClient = authServiceClient;
-    }
+
+    private final TournamentCommandExecutor commandExecutor;
+
+
+    private final AuthServiceClient authServiceClient;
 
     @Autowired
     private TeamServiceClient teamServiceClient;
@@ -48,6 +47,22 @@ public class TournamentController {
 
     @Value("${team.service.url}")
     private String teamServiceUrl;
+
+    @Autowired private JsonExportStrategy<TournamentDto> jsonStrategy;
+    @Autowired private XmlExportStrategy<TournamentDto>  xmlStrategy;
+    @Autowired private CsvExportStrategy                 csvStrategy;
+
+    @Autowired
+    public TournamentController(TournamentQueryService queryService,
+                                TournamentCommandService commandService,
+                                TournamentCommandExecutor commandExecutor,
+                                AuthServiceClient authServiceClient) {
+        this.queryService      = queryService;
+        this.commandService    = commandService;
+        this.commandExecutor   = commandExecutor;
+        this.authServiceClient = authServiceClient;
+    }
+
 
     @GetMapping("/teams")
     public String teams(Model model) {
@@ -97,19 +112,23 @@ public class TournamentController {
         return "tournaments-create";
     }
 
-    @PostMapping("/tournaments/new")
-    public String saveTournament(@Valid @ModelAttribute("tournament") TournamentDto tournamentDto,
-                                 BindingResult bindingResult) {
-        if (bindingResult.hasErrors()) return "tournaments-create";
-        commandService.saveTournament(tournamentDto);
-        return "redirect:/tournaments";
-    }
-
     @GetMapping("/tournaments/{tournamentId}/edit")
     public String editTournamentForm(@PathVariable("tournamentId") int tournamentId, Model model) {
         model.addAttribute("tournament", queryService.findById(tournamentId));
         return "tournaments-edit";
     }
+
+
+    @PostMapping("/tournaments/new")
+    public String saveTournament(@Valid @ModelAttribute("tournament") TournamentDto tournamentDto,
+                                 BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            return "tournaments-create";
+        }
+        commandExecutor.execute(new CreateTournamentCommand(commandService, tournamentDto));
+        return "redirect:/tournaments";
+    }
+
 
     @PostMapping("/tournaments/{tournamentId}/edit")
     public String editTournament(@PathVariable("tournamentId") Long tournamentId,
@@ -121,33 +140,33 @@ public class TournamentController {
             return "tournaments-edit";
         }
         tournamentDto.setId(tournamentId);
-        commandService.updateTournament(tournamentDto);
+        commandExecutor.execute(new UpdateTournamentCommand(commandService, tournamentDto));
         return "redirect:/tournaments";
     }
 
+
     @GetMapping("/tournaments/{tournamentId}/delete")
     public String deleteTournament(@PathVariable("tournamentId") Long tournamentId) {
-        commandService.deleteTournament(tournamentId);
+        commandExecutor.execute(new DeleteTournamentCommand(commandService, tournamentId));
         return "redirect:/tournaments";
     }
 
     @PostMapping("/tournaments/{tournamentId}/join")
-    public String joinTournament(@PathVariable("tournamentId") Long tournamentId, Principal principal) {
-        commandService.joinTournament(tournamentId, principal.getName());
+    public String joinTournament(@PathVariable("tournamentId") Long tournamentId,
+                                 Principal principal) {
+        commandExecutor.execute(
+                new JoinTournamentCommand(commandService, tournamentId, principal.getName()));
         return "redirect:/tournaments?joined";
     }
 
+
     @PostMapping("/tournaments/{tournamentId}/leave")
-    public String leaveTournament(@PathVariable("tournamentId") Long tournamentId, Principal principal) {
-        commandService.leaveTournament(tournamentId, principal.getName());
+    public String leaveTournament(@PathVariable("tournamentId") Long tournamentId,
+                                  Principal principal) {
+        commandExecutor.execute(
+                new LeaveTournamentCommand(commandService, tournamentId, principal.getName()));
         return "redirect:/tournaments?left";
     }
-
-    // ── Export ──────────────────────────────────────────────────────────────────
-
-    @Autowired private JsonExportStrategy<TournamentDto> jsonStrategy;
-    @Autowired private XmlExportStrategy<TournamentDto> xmlStrategy;
-    @Autowired private CsvExportStrategy csvStrategy;
 
     @ResponseBody
     @GetMapping("/tournaments/export")
@@ -167,19 +186,19 @@ public class TournamentController {
 
         switch (format.toLowerCase()) {
             case "xml":
-                result = xmlStrategy.export(tournaments);
+                result      = xmlStrategy.export(tournaments);
                 contentType = "application/xml";
-                fileName += ".xml";
+                fileName   += ".xml";
                 break;
             case "csv":
-                result = csvStrategy.export(tournaments);
+                result      = csvStrategy.export(tournaments);
                 contentType = "text/csv";
-                fileName += ".csv";
+                fileName   += ".csv";
                 break;
             default:
-                result = jsonStrategy.export(tournaments);
+                result      = jsonStrategy.export(tournaments);
                 contentType = "application/json";
-                fileName += ".json";
+                fileName   += ".json";
         }
 
         return ResponseEntity.ok()
