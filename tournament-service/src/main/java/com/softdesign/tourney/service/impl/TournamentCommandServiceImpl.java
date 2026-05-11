@@ -3,10 +3,13 @@ package com.softdesign.tourney.service.impl;
 import com.softdesign.tourney.client.AuthServiceClient;
 import com.softdesign.tourney.dto.TournamentDto;
 import com.softdesign.tourney.models.Tournament;
+import com.softdesign.tourney.publisher.TournamentEventPublisher;
 import com.softdesign.tourney.repository.TournamentRepository;
 import com.softdesign.tourney.service.TournamentCommandService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -16,12 +19,15 @@ public class TournamentCommandServiceImpl implements TournamentCommandService {
 
     private final TournamentRepository tournamentRepository;
     private final AuthServiceClient authServiceClient;
+    private final TournamentEventPublisher eventPublisher;
 
     @Autowired
     public TournamentCommandServiceImpl(TournamentRepository tournamentRepository,
-                                        AuthServiceClient authServiceClient) {
+                                        AuthServiceClient authServiceClient,
+                                        TournamentEventPublisher eventPublisher) {
         this.tournamentRepository = tournamentRepository;
-        this.authServiceClient = authServiceClient;
+        this.authServiceClient    = authServiceClient;
+        this.eventPublisher       = eventPublisher;
     }
 
     @Override
@@ -33,6 +39,8 @@ public class TournamentCommandServiceImpl implements TournamentCommandService {
         tournament.setVrsPoints(dto.getVrsPoints());
         tournament.setTeamIds(new ArrayList<>());
         tournamentRepository.save(tournament);
+
+        eventPublisher.publishCreated(dto.getName(), currentUsername());
     }
 
     @Override
@@ -45,11 +53,20 @@ public class TournamentCommandServiceImpl implements TournamentCommandService {
         existing.setPrizeMoney(dto.getPrizeMoney());
         existing.setVrsPoints(dto.getVrsPoints());
         tournamentRepository.save(existing);
+
+        eventPublisher.publishUpdated(dto.getName(), currentUsername());
     }
 
     @Override
     public void deleteTournament(Long id) {
+        // Fetch the name before deletion so we can include it in the event
+        String name = tournamentRepository.findById(id)
+                .map(Tournament::getName)
+                .orElse("Unknown");
+
         tournamentRepository.deleteById(id);
+
+        eventPublisher.publishDeleted(name, currentUsername());
     }
 
     @Override
@@ -85,5 +102,12 @@ public class TournamentCommandServiceImpl implements TournamentCommandService {
             tournament.getTeamIds().remove(teamId);
             tournamentRepository.save(tournament);
         }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private String currentUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return (auth != null && auth.isAuthenticated()) ? auth.getName() : "system";
     }
 }
